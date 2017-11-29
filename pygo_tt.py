@@ -157,4 +157,40 @@ class Env:
 
         return _list_b,_list_w
 
+    def score(self):
+        traversed = []
+        
+        b_score = 0
+        w_score = 0
 
+        for i in range(self.boardsize):
+            for j in range(self.boardsize):
+                v = (i,j)
+                if v in traversed:
+                    continue
+                _c = self.get_connected(self.board,v)
+                traversed += _c
+                
+                if self.board[v] == 1:
+                    b_score += len(_c)
+                elif self.board[v]:
+                    w_score += len(_c)
+                else:
+                    reach_b = False
+                    reach_w = False
+                    for p in _c:
+                        nbh = self.get_neighbors(p)
+                        for p2 in nbh:
+                            if self.board[p2] == 1:
+                                reach_b = True
+                            if self.board[p2] == -1:
+                                reach_w = True
+                            if reach_b and reach_w:
+                                break
+                        if reach_b and reach_w:
+                            break
+                    if reach_b and not reach_w:
+                        b_score += len(_c)
+                    if not reach_b and reach_w:
+                        w_score += len(_c)
+        return b_score-w_score-self.komi
