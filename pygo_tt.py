@@ -11,11 +11,16 @@ class Env:
 
     def reset(self):
 
-        self.board = np.zeros((self.boardsize,self.boardsize),dtype=np.int8)
+        self.board = np.zeros((self.boardsize,self.boardsize),dtype=np.int16)
+        
+        self.liberty = np.zeros((self.boardsize,self.boardsize),dtype=np.int16) 
 
         self.history = []
 
+        self.update_liberty()
+
         self.update_legals()
+
 
     def get_neighbors(self,vertex):
         
@@ -42,9 +47,9 @@ class Env:
         nbh = self.get_neighbors(vertex)
         
         if traversed == None:
-            traversed = [vertex]
+            traversed = set([vertex])
         else:
-            traversed.append(vertex)
+            traversed.add(vertex)
 #        print vertex, nbh, traversed
  #       raw_input()
 
@@ -87,18 +92,18 @@ class Env:
         else:
             return True
 
-    def capture_neighbors(self,vertex):
+    def capture_neighbors(self,board,vertex):
 
         nbh = self.get_neighbors(vertex)
 
         for p in nbh:
-            if self.board[p] == 0:
+            if board[p] == 0:
                 continue
-            if (self.board[p] != self.board[vertex] and
-                    not self.check_alive(self.board,p)):
-                _c = self.get_connected(self.board,p)
+            if (board[p] != board[vertex] and
+                    self.liberty[p] == 1):
+                _c = self.get_connected(board,p)
                 for p2 in _c:
-                    self.board[p2] = 0
+                    board[p2] = 0
 
     def play(self,color,vertex):
 
@@ -108,13 +113,16 @@ class Env:
         
         self.history.append(self.board)
 
-        self.board = np.copy(self.board)
-        if color == 'black':
-            self.board[vertex] = 1
-        else:
-            self.board[vertex] = -1
+        self.board = self.legals[color][vertex] 
+#        self.board = np.copy(self.board)
+ #       if color == 'black':
+  #          self.board[vertex] = 1
+   #     else:
+    #        self.board[vertex] = -1
 
-        self.capture_neighbors(vertex)
+       # self.capture_neighbors(self.board,vertex)
+
+        self.update_liberty()
 
         self.update_legals()
 
@@ -131,31 +139,89 @@ class Env:
 
     def update_legals(self):
 
-        list_b, list_w = self.list_of_legals()
+        list_b = self.list_of_legals('black')
+        list_w = self.list_of_legals('white')
 
         self.legals = {'black':list_b, 'white':list_w}
 
-    def list_of_legals(self):
+    def list_of_legals(self,color):
 
         list_of_empty = zip(*np.where(self.board==0))
 
-        _list_w = []
-        _list_b = []
+        _list = {'pass':np.copy(self.board)}
+
+        if color == 'black':
+            v = 1
+        else:
+            v = -1
 
         for p in list_of_empty:
             
-            tmp_board_b = np.copy(self.board)
-            tmp_board_b[p] = 1
-            tmp_board_w = np.copy(self.board)
-            tmp_board_w[p] = -1
+            if self.liberty[p] > 0:
+                _is_suicide = False
+            else:
+                _is_suicide = True
+                for _n in self.get_neighbors(p):
+                    if self.board[_n] == v and self.liberty[_n] > 1:
+                        _is_suicide = False
+                    elif self.board[_n] == -v and self.liberty[_n] == 1:
+                        _is_suicide = False
+            if _is_suicide:
+                continue
 
-            if not (self.check_superko(tmp_board_b) or self.check_suicide(tmp_board_b,p)):
-                _list_b.append(p)
+            tmp_board = np.copy(self.board)
+            tmp_board[p] = v
+            self.capture_neighbors(tmp_board,p)
+            
+            if not (self.check_superko(tmp_board)):
+                _list[p] = tmp_board
 
-            if not (self.check_superko(tmp_board_w) or self.check_suicide(tmp_board_w,p)):
-                _list_w.append(p)
 
-        return _list_b,_list_w
+        return _list
+
+    def update_liberty(self):
+
+        traversed = set([]) 
+
+        for i in range(self.boardsize):
+            for j in range(self.boardsize):
+
+                v = (i,j)
+                
+
+                if v in traversed:
+                    continue
+
+                traversed.add(v)
+                if self.board[v] == 0:
+                    _count = 0
+                    for p in self.get_neighbors(v):
+                        if self.board[p] == 0:
+                            _count += 1
+                    self.liberty[v] = _count
+                    continue
+
+                _c = self.get_connected(self.board,v)
+
+                traversed |= _c
+
+                liberty_set = set([])
+
+                for p in _c:
+
+                    nbh = self.get_neighbors(p)
+                    
+                    for p2 in nbh:
+
+                        if self.board[p2] == 0:
+
+                            liberty_set.add(p2)
+
+                liberties = len(liberty_set)
+
+                for p in _c:
+
+                    self.liberty[p] = liberties
 
     def score(self):
         traversed = []
