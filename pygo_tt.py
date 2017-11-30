@@ -11,22 +11,23 @@ class Env:
 
     def reset(self):
 
-        self.board = np.zeros((self.boardsize,self.boardsize),dtype=np.int16)
+        self.init_neighbors()
+
+        self.board = np.zeros((self.boardsize,self.boardsize),dtype=np.int8)
         
-        self.liberty = np.zeros((self.boardsize,self.boardsize),dtype=np.int16) 
+        self.liberty = np.zeros((self.boardsize,self.boardsize),dtype=np.int32) 
+        self.init_liberty()
+
 
         self.history = []
 
-        self.update_liberty()
-
         self.update_legals()
 
-
-    def get_neighbors(self,vertex):
-        
-        _x,_y = vertex
-
-        _list = []
+    def init_neighbors(self):
+        """
+        Construct neighbors' dict w.r.t boardsize
+        """
+        self.neighbors = {}
 
         def inside(x,y):
             if x >= 0 and x < self.boardsize and y >= 0 and y < self.boardsize:
@@ -34,29 +35,39 @@ class Env:
             else:
                 return False
 
-        for i in range(-1,2):
-            if i==0:
-                continue
-            if inside(_x+i,_y):
-                _list.append((_x+i,_y))
-            if inside(_x,_y+i):
-                _list.append((_x,_y+i))
-        return _list
+        for i in xrange(self.boardsize):
+            for j in xrange(self.boardsize):
+                _list = []
+                for k in xrange(-1,2):
+                    if k == 0:
+                        continue
+                    if inside(i+k,j):
+                        _list.append((i+k,j))
+                    if inside(i,j+k):
+                        _list.append((i,j+k))
+                self.neighbors[(i,j)] = _list
+        
+
+    def get_neighbors(self,vertex):
+        """
+        Return list of neighbors of vertex
+        """
+        return self.neighbors[vertex]
 
     def get_connected(self,board,vertex,traversed=None):
+        """
+        Return a set with vertices connected to vertex
+        """
         nbh = self.get_neighbors(vertex)
         
         if traversed == None:
             traversed = set([vertex])
         else:
             traversed.add(vertex)
-#        print vertex, nbh, traversed
- #       raw_input()
 
         for p in nbh:
             if p in traversed:
                 continue
-  #          print p, board[p], vertex, board[vertex]
             if board[p] == board[vertex]:
                 self.get_connected(board,p,traversed)
 
@@ -93,7 +104,9 @@ class Env:
             return True
 
     def capture_neighbors(self,board,vertex):
-
+        """
+        Scan neighbors with liberty = 1 and capture them
+        """
         nbh = self.get_neighbors(vertex)
 
         for p in nbh:
@@ -114,13 +127,6 @@ class Env:
         self.history.append(self.board)
 
         self.board = self.legals[color][vertex] 
-#        self.board = np.copy(self.board)
- #       if color == 'black':
-  #          self.board[vertex] = 1
-   #     else:
-    #        self.board[vertex] = -1
-
-       # self.capture_neighbors(self.board,vertex)
 
         self.update_liberty()
 
@@ -132,8 +138,19 @@ class Env:
         """
         Return True if violation, else return False
         """
-        for b in self.history:
-            if np.array_equal(b,board):
+        def board_equal(b1,b2):
+            for i in xrange(self.boardsize):
+                for j in xrange(self.boardsize):
+                    if b1[i][j] != b2[i][j]:
+                        return False
+            return True
+        
+        _MAX_KO_LENGTH = 15
+
+        length = min(_MAX_KO_LENGTH,len(self.history))
+
+        for i in xrange(length):
+            if board_equal(board,self.history[-1-i]):
                 return True
         return False
 
@@ -179,6 +196,24 @@ class Env:
 
         return _list
 
+    def init_liberty(self):
+        for i in range(self.boardsize):
+            for j in range(self.boardsize):
+                v = (i,j)
+                self.liberty[v] = len(self.get_neighbors(v))
+
+    def count_liberty(self,board,vertex_set):
+
+        liberty_set = set([])
+
+        for v in vertex_set:
+            for n in self.get_neighbors(v):
+                if board[n] == 0:
+                    liberty_set.add(n)
+
+        return len(liberty_set)
+
+
     def update_liberty(self):
 
         traversed = set([]) 
@@ -187,12 +222,12 @@ class Env:
             for j in range(self.boardsize):
 
                 v = (i,j)
-                
 
                 if v in traversed:
                     continue
 
                 traversed.add(v)
+
                 if self.board[v] == 0:
                     _count = 0
                     for p in self.get_neighbors(v):
@@ -222,7 +257,7 @@ class Env:
                 for p in _c:
 
                     self.liberty[p] = liberties
-
+        
     def score(self):
         traversed = []
         
@@ -249,7 +284,7 @@ class Env:
                         for p2 in nbh:
                             if self.board[p2] == 1:
                                 reach_b = True
-                            if self.board[p2] == -1:
+                            elif self.board[p2] == -1:
                                 reach_w = True
                             if reach_b and reach_w:
                                 break
@@ -257,6 +292,6 @@ class Env:
                             break
                     if reach_b and not reach_w:
                         b_score += len(_c)
-                    if not reach_b and reach_w:
+                    elif not reach_b and reach_w:
                         w_score += len(_c)
         return b_score-w_score-self.komi
