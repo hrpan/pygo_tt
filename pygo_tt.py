@@ -59,7 +59,7 @@ class Env:
         Return a set with vertices connected to vertex
         """
         nbh = self.get_neighbors(vertex)
-        
+
         if traversed == None:
             traversed = set([vertex])
         else:
@@ -73,6 +73,27 @@ class Env:
 
         return traversed
 
+    def get_connected_iter(self,board,vertex):
+        """
+        Return a set of vertices that are connected to vertex (iterative)
+        """
+        nbh = self.neighbors[vertex]
+
+        traversed = set([vertex])
+
+        v_left = list(nbh)
+
+        for _v in v_left:
+            
+            if _v in traversed:
+                continue
+
+            if board[_v] == board[vertex]:
+                traversed.add(_v)
+                v_left += self.get_neighbors(_v)
+
+        return traversed
+
 
     def check_alive(self,board,vertex):
         """
@@ -81,7 +102,7 @@ class Env:
         if board[vertex] == 0:
             return True
 
-        connected = self.get_connected(board,vertex)
+        connected = self.get_connected_iter(board,vertex)
 
         for p in connected:
 
@@ -114,7 +135,7 @@ class Env:
                 continue
             if (board[p] != board[vertex] and
                     self.liberty[p] == 1):
-                _c = self.get_connected(board,p)
+                _c = self.get_connected_iter(board,p)
                 for p2 in _c:
                     board[p2] = 0
 
@@ -236,7 +257,7 @@ class Env:
                     self.liberty[v] = _count
                     continue
 
-                _c = self.get_connected(self.board,v)
+                _c = self.get_connected_iter(self.board,v)
 
                 traversed |= _c
 
@@ -269,7 +290,7 @@ class Env:
                 v = (i,j)
                 if v in traversed:
                     continue
-                _c = self.get_connected(self.board,v)
+                _c = self.get_connected_iter(self.board,v)
                 traversed += _c
                 
                 if self.board[v] == 1:
