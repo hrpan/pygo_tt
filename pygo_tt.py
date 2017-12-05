@@ -21,6 +21,8 @@ class Env:
 
         self.history = []
 
+        self.history_hash = set([])
+
         self.update_legals()
 
     def init_neighbors(self):
@@ -147,6 +149,8 @@ class Env:
         
         self.history.append(self.board)
 
+        self.history_hash.add(tuple(self.board.flatten()))
+
         self.board = self.legals[color][vertex] 
 
         self.update_liberty()
@@ -174,6 +178,23 @@ class Env:
             if board_equal(board,self.history[-1-i]):
                 return True
         return False
+
+    def check_superko_hash(self,board):
+        """
+        Test if board hash in history
+        Return True if violation, else return False 
+        """
+        
+        _MAX_KO_LENGTH = 15
+
+        length = min(_MAX_KO_LENGTH,len(self.history_hash))
+
+        _tuple = tuple(board.flatten())
+
+        if _tuple in self.history_hash:
+            return True
+        else:
+            return False
 
     def update_legals(self):
 
@@ -211,7 +232,8 @@ class Env:
             tmp_board[p] = v
             self.capture_neighbors(tmp_board,p)
             
-            if not (self.check_superko(tmp_board)):
+#            if not (self.check_superko(tmp_board)):
+            if not (self.check_superko_hash(tmp_board)):
                 _list[p] = tmp_board
 
 
