@@ -37,10 +37,10 @@ class Env:
             else:
                 return False
 
-        for i in xrange(self.boardsize):
-            for j in xrange(self.boardsize):
+        for i in range(self.boardsize):
+            for j in range(self.boardsize):
                 _list = []
-                for k in xrange(-1,2):
+                for k in range(-1,2):
                     if k == 0:
                         continue
                     if inside(i+k,j):
@@ -164,8 +164,8 @@ class Env:
         Return True if violation, else return False
         """
         def board_equal(b1,b2):
-            for i in xrange(self.boardsize):
-                for j in xrange(self.boardsize):
+            for i in range(self.boardsize):
+                for j in range(self.boardsize):
                     if b1[i][j] != b2[i][j]:
                         return False
             return True
@@ -174,7 +174,7 @@ class Env:
 
         length = min(_MAX_KO_LENGTH,len(self.history))
 
-        for i in xrange(length):
+        for i in range(length):
             if board_equal(board,self.history[-1-i]):
                 return True
         return False
