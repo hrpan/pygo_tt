@@ -1,4 +1,25 @@
 import numpy as np
+from numpy.ctypeslib import ndpointer
+from ctypes import *
+util_lib = CDLL('./util/util.so')
+
+ndintptr = ndpointer(c_int,flags='C')
+intptr = POINTER(c_int)
+c_init_neighbors = util_lib.init_neighbors
+c_init_neighbors.argtypes = [c_int]
+c_init_neighbors.restype = None
+
+c_count_liberty = util_lib.count_liberty
+c_count_liberty.argtypes = [intptr,intptr,c_int]
+c_count_liberty.restype = None
+
+c_capture_neighbors = util_lib.capture_neighbors
+c_capture_neighbors.argtypes = [intptr,intptr,c_int,c_int]
+c_capture_neighbors.restype = None
+
+c_is_suicide = util_lib.is_suicide
+c_is_suicide.argtypes = [intptr,intptr,c_int,c_int,c_int]
+c_is_suicide.restype = c_bool
 
 class Env:
     def __init__(self,boardsize=9,komi=6.5):
@@ -7,13 +28,15 @@ class Env:
 
         self.komi = komi
 
+        c_init_neighbors(boardsize)
+
         self.reset()
 
     def reset(self):
 
         self.init_neighbors()
 
-        self.board = np.zeros((self.boardsize,self.boardsize),dtype=np.int8)
+        self.board = np.zeros((self.boardsize,self.boardsize),dtype=np.int32)
         
         self.liberty = np.zeros((self.boardsize,self.boardsize),dtype=np.int32) 
         self.init_liberty()
@@ -140,6 +163,12 @@ class Env:
                 _c = self.get_connected_iter(board,p)
                 for p2 in _c:
                     board[p2] = 0
+    def c_capture_neighbors(self,board,vertex):
+        
+        to_idx = lambda x: x[0]*self.boardsize+x[1]
+        b_ptr = board.ctypes.data_as(intptr)
+        l_ptr = self.liberty.ctypes.data_as(intptr)
+        c_capture_neighbors(b_ptr,l_ptr,self.boardsize,to_idx(vertex))
 
     def play(self,color,vertex):
 
@@ -153,7 +182,8 @@ class Env:
 
         self.board = self.legals[color][vertex] 
 
-        self.update_liberty()
+        #self.update_liberty()
+        self.c_update_liberty()
 
         self.update_legals()
 
@@ -189,7 +219,7 @@ class Env:
 
         length = min(_MAX_KO_LENGTH,len(self.history_hash))
 
-        _tuple = tuple(board.flatten())
+        _tuple = tuple(board.ravel())
 
         if _tuple in self.history_hash:
             return True
@@ -202,6 +232,24 @@ class Env:
         list_w = self.list_of_legals('white')
 
         self.legals = {'black':list_b, 'white':list_w}
+    def is_suicide(self,v,p):
+
+        if self.liberty[p] > 0:
+            return False
+        else:
+            for _n in self.get_neighbors(p):
+                if self.board[_n] == v and self.liberty[_n] > 1:
+                    return False
+                elif self.board[_n] == -v and self.liberty[_n] == 1:
+                    return False
+        return True
+
+    def c_is_suicide(self,v,p):
+
+        to_idx = lambda x: x[0]*self.boardsize+x[1]
+        b_ptr = self.board.ctypes.data_as(intptr)
+        l_ptr = self.liberty.ctypes.data_as(intptr)
+        return c_is_suicide(b_ptr,l_ptr,self.boardsize,v,to_idx(p))
 
     def list_of_legals(self,color):
 
@@ -215,23 +263,16 @@ class Env:
             v = -1
 
         for p in list_of_empty:
+
+            _is_suicide = self.is_suicide(v,p)
             
-            if self.liberty[p] > 0:
-                _is_suicide = False
-            else:
-                _is_suicide = True
-                for _n in self.get_neighbors(p):
-                    if self.board[_n] == v and self.liberty[_n] > 1:
-                        _is_suicide = False
-                    elif self.board[_n] == -v and self.liberty[_n] == 1:
-                        _is_suicide = False
             if _is_suicide:
                 continue
 
             tmp_board = np.copy(self.board)
             tmp_board[p] = v
             self.capture_neighbors(tmp_board,p)
-            
+
 #            if not (self.check_superko(tmp_board)):
             if not (self.check_superko_hash(tmp_board)):
                 _list[p] = tmp_board
@@ -255,7 +296,7 @@ class Env:
                     liberty_set.add(n)
 
         return len(liberty_set)
-
+   
 
     def update_liberty(self):
 
@@ -300,7 +341,16 @@ class Env:
                 for p in _c:
 
                     self.liberty[p] = liberties
-        
+        #print(self.liberty)
+    def c_update_liberty(self):
+
+
+        size = self.boardsize
+        b_ptr = self.board.ctypes.data_as(intptr)
+        l_ptr = self.liberty.ctypes.data_as(intptr)
+        c_count_liberty(b_ptr,l_ptr,size)
+
+        #print(self.liberty)
     def score(self):
         traversed = []
         
