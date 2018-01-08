@@ -165,4 +165,58 @@ extern "C"{
 		
 		return true;
 	}
+	
+	bool board_equal(int *b1, int *b2, int size){
+		for(int i=0;i<size*size;++i)
+			if(b1[i] != b2[i])
+				return false;
+		return true;
+	}
+	
+	bool check_superko(int *board, int *history, int h_len, int size){
+		//return true if violate
+
+		int b_size = size * size;
+
+		for(int i=0;i<h_len;++i)
+			if(board_equal(board,history+i*b_size,size))
+				return true;
+		return false;
+	}
+
+	int list_of_legals(int *board, int *liberty, int *result, int *vertex, int *history, int h_len, const int size, int color){
+
+		int b_num = 1;
+		
+		const int b_size = size * size;
+
+		std::copy(board,board+b_size,result);
+		vertex[0] = -1;
+		vertex[1] = -1;
+		
+		for(int i=0;i<b_size;++i){
+
+			if(board[i]!=0)
+				continue;
+
+			bool _is_suicide = is_suicide(board,liberty,size,color,i);
+
+			if(_is_suicide)
+				continue;
+			
+			std::copy(board,board+b_size,result+b_num*b_size);
+
+			result[b_num*b_size+i] = color;
+
+			capture_neighbors(result+b_num*b_size,liberty,size,i);
+			
+			if(check_superko(result+b_num*b_size,history,h_len,size))
+				continue;
+
+			vertex[b_num] = i;
+
+			b_num += 1;
+		}
+		return b_num;	
+	}
 }
