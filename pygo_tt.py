@@ -1,7 +1,8 @@
 import numpy as np
 from numpy.ctypeslib import ndpointer
 from ctypes import *
-util_lib = CDLL('./util/util.so')
+from os.path import dirname
+util_lib = CDLL(dirname(__file__)+'/util/util.so')
 
 ndintptr = ndpointer(c_int,flags='C')
 intptr = POINTER(c_int)
@@ -13,13 +14,11 @@ c_count_liberty = util_lib.count_liberty
 c_count_liberty.argtypes = [intptr,intptr,c_int]
 c_count_liberty.restype = None
 
-c_capture_neighbors = util_lib.capture_neighbors
-c_capture_neighbors.argtypes = [intptr,intptr,c_int,c_int]
-c_capture_neighbors.restype = None
+c_list_of_legals = util_lib.list_of_legals
+c_list_of_legals.argtypes = [intptr,intptr,intptr,intptr,intptr,c_int,c_int,c_int]
+c_list_of_legals.restype = c_int
 
-c_is_suicide = util_lib.is_suicide
-c_is_suicide.argtypes = [intptr,intptr,c_int,c_int,c_int]
-c_is_suicide.restype = c_bool
+_MAX_KO_LENGTH = 15
 
 class Env:
     def __init__(self,boardsize=9,komi=6.5):
@@ -163,13 +162,7 @@ class Env:
                 _c = self.get_connected_iter(board,p)
                 for p2 in _c:
                     board[p2] = 0
-    def c_capture_neighbors(self,board,vertex):
-        
-        to_idx = lambda x: x[0]*self.boardsize+x[1]
-        b_ptr = board.ctypes.data_as(intptr)
-        l_ptr = self.liberty.ctypes.data_as(intptr)
-        c_capture_neighbors(b_ptr,l_ptr,self.boardsize,to_idx(vertex))
-
+   
     def play(self,color,vertex):
 
         if vertex not in self.legals[color]:
@@ -199,8 +192,6 @@ class Env:
                     if b1[i][j] != b2[i][j]:
                         return False
             return True
-        
-        _MAX_KO_LENGTH = 15
 
         length = min(_MAX_KO_LENGTH,len(self.history))
 
@@ -214,8 +205,6 @@ class Env:
         Test if board hash in history
         Return True if violation, else return False 
         """
-        
-        _MAX_KO_LENGTH = 15
 
         length = min(_MAX_KO_LENGTH,len(self.history_hash))
 
@@ -227,9 +216,13 @@ class Env:
             return False
 
     def update_legals(self):
+        
+        list_b = self.c_list_of_legals('black')
+        list_w = self.c_list_of_legals('white')
 
-        list_b = self.list_of_legals('black')
-        list_w = self.list_of_legals('white')
+        #list_b = self.list_of_legals('black')
+        #list_w = self.list_of_legals('white')
+
 
         self.legals = {'black':list_b, 'white':list_w}
     def is_suicide(self,v,p):
@@ -243,14 +236,7 @@ class Env:
                 elif self.board[_n] == -v and self.liberty[_n] == 1:
                     return False
         return True
-
-    def c_is_suicide(self,v,p):
-
-        to_idx = lambda x: x[0]*self.boardsize+x[1]
-        b_ptr = self.board.ctypes.data_as(intptr)
-        l_ptr = self.liberty.ctypes.data_as(intptr)
-        return c_is_suicide(b_ptr,l_ptr,self.boardsize,v,to_idx(p))
-
+   
     def list_of_legals(self,color):
 
         list_of_empty = zip(*np.where(self.board==0))
@@ -277,6 +263,44 @@ class Env:
             if not (self.check_superko_hash(tmp_board)):
                 _list[p] = tmp_board
 
+
+        return _list
+    def c_list_of_legals(self,color):
+
+
+        if color == 'black':
+            v = 1
+        else:
+            v = -1
+
+        b_size = self.boardsize 
+
+        result = np.zeros((b_size**2+1,b_size,b_size),dtype=np.int32)
+        vertex = np.zeros(b_size**2+1,dtype=np.int32)
+        history = np.array(self.history[-_MAX_KO_LENGTH:])
+
+        board_ptr = self.board.ctypes.data_as(intptr)
+        liberty_ptr = self.liberty.ctypes.data_as(intptr)
+        result_ptr = result.ctypes.data_as(intptr)
+        vertex_ptr = vertex.ctypes.data_as(intptr)
+        history_ptr = history.ctypes.data_as(intptr)
+
+        n_legals = c_list_of_legals(board_ptr,
+                liberty_ptr,
+                result_ptr,
+                vertex_ptr,
+                history_ptr,
+                len(history),
+                b_size,v)
+
+        
+        _list = {}
+
+        _list['pass'] = result[0]
+
+        for i in range(1,n_legals):
+            _vert = (vertex[i] // b_size, vertex[i] % b_size)
+            _list[_vert] = result[i]
 
         return _list
 
