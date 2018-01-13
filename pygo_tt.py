@@ -40,6 +40,7 @@ class Env:
         self.liberty = np.zeros((self.boardsize,self.boardsize),dtype=np.int32) 
         self.init_liberty()
 
+        self.legal_boards = {}
 
         self.history = []
 
@@ -165,16 +166,20 @@ class Env:
    
     def play(self,color,vertex):
 
-        if vertex not in self.legals[color]:
-            return False
+        if vertex == 'pass':
+            return True
 
-        
+        try:
+            index = self.legals[color].index(vertex)
+        except ValueError:
+            return False
+       
         self.history.append(self.board)
 
-        self.history_hash.add(tuple(self.board.flatten()))
+        #self.history_hash.add(tuple(self.board.flatten()))
 
-        self.board = self.legals[color][vertex] 
-
+        #self.board = self.legals[color][vertex] 
+        self.board = self.legal_boards[color][index]
         #self.update_liberty()
         self.c_update_liberty()
 
@@ -184,6 +189,7 @@ class Env:
 
     def check_superko(self,board):
         """
+        DEPRECATED
         Return True if violation, else return False
         """
         def board_equal(b1,b2):
@@ -202,6 +208,7 @@ class Env:
 
     def check_superko_hash(self,board):
         """
+        DPRECATED
         Test if board hash in history
         Return True if violation, else return False 
         """
@@ -226,7 +233,9 @@ class Env:
 
         self.legals = {'black':list_b, 'white':list_w}
     def is_suicide(self,v,p):
-
+        """
+        DEPRECATED
+        """
         if self.liberty[p] > 0:
             return False
         else:
@@ -238,7 +247,9 @@ class Env:
         return True
    
     def list_of_legals(self,color):
-
+        """
+        DEPRECATED
+        """
         list_of_empty = zip(*np.where(self.board==0))
 
         _list = {'pass':np.copy(self.board)}
@@ -267,7 +278,6 @@ class Env:
         return _list
     def c_list_of_legals(self,color):
 
-
         if color == 'black':
             v = 1
         else:
@@ -275,8 +285,8 @@ class Env:
 
         b_size = self.boardsize 
 
-        result = np.zeros((b_size**2+1,b_size,b_size),dtype=np.int32)
-        vertex = np.zeros(b_size**2+1,dtype=np.int32)
+        result = np.zeros((b_size**2,b_size,b_size),dtype=np.int32)
+        vertex = np.zeros(b_size**2,dtype=np.int32)
         history = np.array(self.history[-_MAX_KO_LENGTH:])
 
         board_ptr = self.board.ctypes.data_as(intptr)
@@ -293,15 +303,13 @@ class Env:
                 len(history),
                 b_size,v)
 
+        indices = np.unravel_index(vertex[:n_legals],(b_size,b_size))
         
-        _list = {}
+        _list = list(zip(*indices))
+        _list.append('pass')
 
-        _list['pass'] = result[0]
-
-        for i in range(1,n_legals):
-            _vert = (vertex[i] // b_size, vertex[i] % b_size)
-            _list[_vert] = result[i]
-
+        self.legal_boards[color] = result[:n_legals]
+        
         return _list
 
     def init_liberty(self):
