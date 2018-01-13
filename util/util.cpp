@@ -186,14 +186,10 @@ extern "C"{
 
 	int list_of_legals(int *board, int *liberty, int *result, int *vertex, int *history, int h_len, const int size, int color){
 
-		int b_num = 1;
+		int b_num = 0;
 		
 		const int b_size = size * size;
-
-		std::copy(board,board+b_size,result);
-		vertex[0] = -1;
-		vertex[1] = -1;
-		
+	
 		for(int i=0;i<b_size;++i){
 
 			if(board[i]!=0)
